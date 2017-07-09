@@ -22,7 +22,8 @@ const (
 type Block struct {
 	*Header    `json:"header"`
 	*Data      `json:"data"`
-	LastCommit *Commit `json:"last_commit"`
+	Evidence   EvidenceData `json:"evidence"`
+	LastCommit *Commit      `json:"last_commit"`
 }
 
 // TODO: version
@@ -47,7 +48,12 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 	return block, block.MakePartSet(partSize)
 }
 
-// Basic validation that doesn't involve state data.
+// AddEvidence appends the given evidence to the block
+func (b *Block) AddEvidence(evidence []Evidence) {
+	b.Evidence.Evidence = append(b.Evidence.Evidence, evidence...)
+}
+
+// ValidateBasic performs basic validation that doesn't involve state data.
 func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID BlockID,
 	lastBlockTime time.Time, appHash []byte) error {
 	if b.ChainID != chainID {
@@ -83,6 +89,9 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 	if !bytes.Equal(b.AppHash, appHash) {
 		return errors.New(Fmt("Wrong Block.Header.AppHash.  Expected %X, got %v", appHash, b.AppHash))
 	}
+	if !bytes.Equal(b.EvidenceHash, b.Evidence.Hash()) {
+		return errors.New(cmn.Fmt("Wrong Block.Header.EvidenceHash.  Expected %v, got %v", b.EvidenceHash, b.Evidence.Hash()))
+	}
 	// NOTE: the AppHash and ValidatorsHash are validated later.
 	return nil
 }
@@ -93,6 +102,9 @@ func (b *Block) FillHeader() {
 	}
 	if b.DataHash == nil {
 		b.DataHash = b.Data.Hash()
+	}
+	if b.EvidenceHash == nil {
+		b.EvidenceHash = b.Evidence.Hash()
 	}
 }
 
@@ -136,9 +148,11 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s  %v
+%s  %v
 %s}#%v`,
 		indent, b.Header.StringIndented(indent+"  "),
 		indent, b.Data.StringIndented(indent+"  "),
+		indent, b.Evidence.StringIndented(indent+"  "),
 		indent, b.LastCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
 }
@@ -153,6 +167,8 @@ func (b *Block) StringShort() string {
 
 //-----------------------------------------------------------------------------
 
+// Header defines the structure of a Tendermint block header
+// NOTE: changes to the Header should be duplicated in the abci Header
 type Header struct {
 	ChainID        string     `json:"chain_id"`
 	Height         int        `json:"height"`
@@ -163,6 +179,7 @@ type Header struct {
 	DataHash       data.Bytes `json:"data_hash"`        // transactions
 	ValidatorsHash data.Bytes `json:"validators_hash"`  // validators for the current block
 	AppHash        data.Bytes `json:"app_hash"`         // state after txs from the previous block
+	EvidenceHash   data.Bytes `json:"evidence_hash"`    // evidence included in the block
 }
 
 // NOTE: hash is nil if required fields are missing.
@@ -180,6 +197,7 @@ func (h *Header) Hash() data.Bytes {
 		"Data":        h.DataHash,
 		"Validators":  h.ValidatorsHash,
 		"App":         h.AppHash,
+		"Evidence":    h.EvidenceHash,
 	})
 }
 
@@ -197,6 +215,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Data:           %v
 %s  Validators:     %v
 %s  App:            %v
+%s  Evidence:            %v
 %s}#%v`,
 		indent, h.ChainID,
 		indent, h.Height,
@@ -207,6 +226,7 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.DataHash,
 		indent, h.ValidatorsHash,
 		indent, h.AppHash,
+		indent, h.EvidenceHash,
 		indent, h.Hash())
 }
 
@@ -384,6 +404,33 @@ func (data *Data) StringIndented(indent string) string {
 %s}#%v`,
 		indent, strings.Join(txStrings, "\n"+indent+"  "),
 		indent, data.hash)
+}
+
+//-----------------------------------------------------------------------------
+
+// EvidenceData contains any evidence of malicious wrong-doing by validators
+type EvidenceData struct {
+	Evidence []Evidence `json:"evidence"`
+
+	// Volatile
+	hash data.Bytes
+}
+
+// Hash returns the hash of the data
+func (data *EvidenceData) Hash() data.Bytes {
+	if data.hash == nil {
+		// TODO
+	}
+	return data.hash
+}
+
+// StringIndented returns a string representation of the transactions
+func (data *EvidenceData) StringIndented(indent string) string {
+	if data == nil {
+		return "nil-Data"
+	}
+	// TODO
+	return ""
 }
 
 //--------------------------------------------------------------------------------
